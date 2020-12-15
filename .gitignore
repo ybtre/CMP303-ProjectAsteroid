@@ -31,7 +31,12 @@
 *.out
 *.app
 
-.idea
+.idea/
+Debug/
+Release/
+PredictionExample/Debug
+PredictionExample/Release
+PredictionExample/SFML-2.4.2
 
 ipch/
 *.aps
