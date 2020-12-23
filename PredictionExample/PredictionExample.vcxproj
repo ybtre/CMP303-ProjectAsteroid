@@ -214,9 +214,6 @@
     <ClInclude Include="Headers\Tank.h" />
     <ClInclude Include="Headers\TankMessage.h" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Client Networking" />
-  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{54189262-7471-41bb-a826-bec49343034d}</ProjectGuid>

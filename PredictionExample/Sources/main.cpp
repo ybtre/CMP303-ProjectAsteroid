@@ -29,70 +29,90 @@ bool hasCollided(Entity* a, Entity* b) {
 }
 
 
-// sf::Packet operator>>(const sf::Packet& lhs, const float& rhs);
-
 int main() {
-    int lives = 0;
+    int lives = 300;
+    int score = 0;
+    
+    bool update = true;
     srand(time(nullptr));
 
 #pragma region Networking_Setup
-#pragma region TCP
-    sf::TcpSocket TCPSocket;
-    TCPSocket.setBlocking(true);
-    bool update = false;
+    sf::TcpSocket tcp_socket;
+    tcp_socket.setBlocking(true);
+    sf::Socket::Status socket_status = {};
+    std::string text = "Connected to: ";
+    char buffer[1000];
+    std::size_t received;
+    char connectionType, mode;
 
-    sf::TcpListener TCPListener;
+    std::cout << "Enter (s) fir Server, Enter (c) for client: " << std::endl;
+    std::cin >> connectionType;
 
-    sf::Socket::Status connectionStatus = TCPSocket.connect(SERVERIP, CLIENTPORT);
-    if (connectionStatus == sf::Socket::Done) {
-        // std::cout << "Could not connect to server IP: " << SERVERIP << " Port: " << CLIENTPORT << std::endl; 
-        std::cout << "Connected to server IP: " << SERVERIP << " Port: " << CLIENTPORT << std::endl;
-    } else {
-        std::cout << "Could not connect to Server. Status: " << connectionStatus << std::endl;
-            //Done,         - 0
-            //NotReady,     - 1
-            //Partial,      - 2
-            //Disconnected, - 3
-            //Error         - 4 
+    if (connectionType == 's') {
+        sf::TcpListener tcp_listener;
+        switch (socket_status) {
+        case sf::Socket::Done:
+            tcp_listener.listen(CLIENTPORT);
+            std::cout << "Listening to Port: " << CLIENTPORT << std::endl;
+            tcp_listener.accept(tcp_socket);
+            std::cout << "TCP Accepted Socket" << std::endl << std::endl;
+
+            text += "Server";
+            break;
+        case sf::Socket::NotReady:
+            std::cout << socket_status << std::endl;
+            break;
+        case sf::Socket::Partial:
+            std::cout << socket_status << std::endl;
+            break;
+        case sf::Socket::Disconnected:
+            std::cout << "disconnected client" << std::endl;
+            break;
+        case sf::Socket::Error:
+            std::cout << socket_status << std::endl;
+            break;
+        }
     }
-    sf::Packet initialLivesPacket;
-    TCPSocket.receive(initialLivesPacket);
-    if(initialLivesPacket >> lives) {
-        initialLivesPacket >> lives;
-        std::cout << "received and set: " << lives << " lives from the server" << std::endl;
-    } else {
-        std::cout << "did not receive any INITIAL packets about lives" << std::endl;
+    else if (connectionType == 'c') {
+        switch (socket_status) {
+        case sf::Socket::Done:
+            tcp_socket.connect(SERVERIP, CLIENTPORT);
+
+            text += "Client";
+            break;
+        case sf::Socket::NotReady:
+            std::cout << socket_status << std::endl;
+            break;
+        case sf::Socket::Partial:
+            std::cout << socket_status << std::endl;
+            break;
+        case sf::Socket::Disconnected:
+            std::cout << "disconnected client" << std::endl;
+            break;
+        case sf::Socket::Error:
+            std::cout << socket_status << std::endl;
+            break;
+        }
+    }
+    tcp_socket.send(text.c_str(), text.length() + 1);
+    tcp_socket.receive(buffer, sizeof(buffer), received);
+    std::cout << buffer << std::endl;
+
+    sf::Packet initPacket;
+    initPacket << lives << score;
+    tcp_socket.send(initPacket);
+
+    sf::Packet recvInitPacket;
+    tcp_socket.receive(recvInitPacket);
+    if (recvInitPacket >> lives >> score) {
+        std::cout << "received and set " << lives << " and " << score << " Score" << std::endl;
     }
     
-    TCPSocket.setBlocking(false);
-
-#pragma endregion TCP
-
-#pragma region UDP
-    // sf::UdpSocket UDPSocket;
-    // UDPSocket.setBlocking(false);
-    // char buffer[200];
-    // std::size_t received;
-    // std::map<unsigned short, sf::IpAddress> pcID;
-    // std::string text = "Client Text";
-    // unsigned short setPort;
-    // std::cout << "Set port: ";
-    // std::cin >> setPort;
-    // UDPSocket.bind(setPort);
-    // sf::IpAddress sIp;
-    // std::cout << SERVERIP << std::endl;
-    // std::cout << "Enter server ip: ";
-    // std::cin >> sIp;
-    // UDPSocket.send(text.c_str(), text.length() + 1, sIp, 5555);
-#pragma endregion UDP
+    tcp_socket.setBlocking(false);
 
 #pragma endregion Networking_Setup_end
 
 #pragma region Settings_hideForNow
-    // Lifes and Score //
-   
-    int score = 0;
-
     sf::Font hudFont;
     if (!hudFont.loadFromFile("images/Fonts/Magettas Regular DEMO.otf"))
         return 0;
@@ -217,48 +237,18 @@ int main() {
         //Get the time since the last frame in milliseconds
         float dt = clock.restart().asSeconds() * gameSpeed;
 
-#pragma region Client_Networking
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ////////////////////////////////////////////////// CLIENT NETWORKING ///////////////////////////////////////////////
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        // std::getline(std::cin, test);
-        // TCPSocket.send(test.c_str(), test.length() + 1);
-        //
-        // TCPSocket.receive(buffer, sizeof(buffer), received);
-        // if (received > 0) {
-        //     std::cout << "Received: " << buffer << std::endl;
-        // }
-
-        // UDPSocket.bind(port); //listen to that port
-        // sf::Thread receiveThread([&UDPSocket, &buffer, &received]() {
-        // sf::IpAddress tempIp;
-        // unsigned short tempPort; 
-        // UDPSocket.receive(buffer, sizeof(buffer), received, tempIp, tempPort);
-        // std::cout << "temp ip: " << tempIp << " temp port " << tempPort << std::endl;
-        // if (received > 0) {
-        //     std::cout << "Received: " << buffer << std::endl;
-        // }
-        // else {
-        //    std::cout << "did not receive anything" << std::endl;
-        // }
-        //
-        // });
-        // receiveThread.launch();
-#pragma endregion Client_Networking
-
 #pragma region SFML_Events
         sf::Event event;
         while (app.pollEvent(event)) {
             if (event.type == sf::Event::Closed) {
                 app.close();
             }
-            // else if (event.type == sf::Event::GainedFocus) {
-            //     update = true;
-            // }
-            // else if (event.type == sf::Event::LostFocus) {
-            //     update = false;
-            // }
-
+            if (event.type == sf::Event::GainedFocus) {
+                update = true;
+            }
+            if (event.type == sf::Event::LostFocus) {
+                update = false;
+            }
             // Fire control and logic //
             if (event.type == sf::Event::KeyPressed)
                 if (event.key.code == sf::Keyboard::RControl) {
@@ -277,7 +267,7 @@ int main() {
 #pragma endregion SFML_Events
 
 #pragma region Keyboard_Inputs
-        // if (update) {
+        if (update) {
             // Movement controls //
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) playersArr[0]->angle += 300 * dt;
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
@@ -289,7 +279,7 @@ int main() {
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) playersArr[1]->angle -= 300 * dt;
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) playersArr[1]->thrust = true;
             else playersArr[1]->thrust = false;
-        // }
+        }
 
         // Quit Game //
 
@@ -298,25 +288,6 @@ int main() {
         }
 #pragma endregion Keyboard_Inputs
 
-#pragma region TCPPacket
-        auto player1_X = playersArr[0]->GetPlayerPosition_X();
-        auto player1_Y = playersArr[0]->GetPlayerPosition_Y();
-        auto player2_X = playersArr[1]->GetPlayerPosition_X();
-        auto player2_Y = playersArr[1]->GetPlayerPosition_Y();
-        sf::Packet recvTCPPacket;
-        // if(playersArr[0]->dx != playersArr[0]->GetPlayerPosition_X()) { // send if pos is different
-        // if (player1_X != 0 && player1_Y != 0) {
-        //     TCPPacket << player1_X << player1_Y;
-        //     TCPSocket.send(TCPPacket);
-        // }
-        TCPSocket.receive(recvTCPPacket);
-        if(recvTCPPacket >> lives) {
-            std::cout << "received and set: " << lives << " lives from the server" << std::endl;
-        } else {
-            // std::cout << "did not receive any packets about lives" << std::endl;
-        }
-
-#pragma endregion TCPPacket
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //////////////////////////////////////// Collision Detection ///////////////////////////////////////////////////////////
@@ -329,7 +300,7 @@ int main() {
                         entityA->life = false;
                         entityB->life = false;
 
-                        score++;
+                        score += 10;
                         totalScore.setString(std::to_string(score));
 
                         // Adding the explosion animation //
@@ -371,10 +342,20 @@ int main() {
 
                         // Lives are reduced on death, if lives reach 0, pause screen //
                         lives--;
-                        sf::Packet livesPacket;
-                        livesPacket << lives;
-                        TCPSocket.send(livesPacket);
-                        std::cout << "sending " << lives << " lives to the server" << std::endl;
+                        if(connectionType == 'c') {
+                            std::cout << "sending " << lives << " lives to the server" << std::endl;
+                            sf::Packet livesPacket;
+                            livesPacket << lives;
+                            tcp_socket.send(livesPacket);
+                        }
+
+                        if(connectionType == 's') {
+                            sf::Packet recvLivesPacktet;
+                            tcp_socket.receive(recvLivesPacktet);
+                            if(recvLivesPacktet >> lives) {
+                                std::cout << "Received " << lives << " lives" << std::endl;
+                            }
+                        }
                         
                         livesLeft.setString(std::to_string(lives));
                         // if (lives < 0) {
