@@ -33,6 +33,7 @@ bool hasCollided(Entity* a, Entity* b) {
 
 int main() {
     int lives = 0;
+    int score = 0;
     srand(time(nullptr));
 
 #pragma region Networking_Setup
@@ -55,11 +56,11 @@ int main() {
             //Disconnected, - 3
             //Error         - 4 
     }
-    sf::Packet initialLivesPacket;
-    TCPSocket.receive(initialLivesPacket);
-    if(initialLivesPacket >> lives) {
-        initialLivesPacket >> lives;
-        std::cout << "received and set: " << lives << " lives from the server" << std::endl;
+    sf::Packet initPacket;
+    auto initRecvStatus =   TCPSocket.receive(initPacket);
+    if(initRecvStatus == sf::Socket::Done) {
+        initPacket >> lives >> score;
+        std::cout << "received and set INITIAL: " << lives << " lives from the server" << std::endl;
     } else {
         std::cout << "did not receive any INITIAL packets about lives" << std::endl;
     }
@@ -89,11 +90,7 @@ int main() {
 #pragma endregion Networking_Setup_end
 
 #pragma region Settings_hideForNow
-    // Lifes and Score //
-   
-    int score = 0;
-
-    sf::Font hudFont;
+     sf::Font hudFont;
     if (!hudFont.loadFromFile("images/Fonts/Magettas Regular DEMO.otf"))
         return 0;
 
@@ -206,44 +203,24 @@ int main() {
 
     // Clock for timing the deltaTime value
     sf::Clock clock;
-    float gameSpeed = 1.0f;
+    sf::Time elapsedTime;
+    sf::Clock PacketClock;
 #pragma endregion Settings_hideForNow
-
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////// MAIN LOOP //////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     while (app.isOpen()) {
         //Get the time since the last frame in milliseconds
-        float dt = clock.restart().asSeconds() * gameSpeed;
+        float dt = clock.restart().asSeconds();
+        sf::Time packet_dt = sf::seconds(0.33);
+        elapsedTime += PacketClock.restart();
+        
 
 #pragma region Client_Networking
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         ////////////////////////////////////////////////// CLIENT NETWORKING ///////////////////////////////////////////////
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        // std::getline(std::cin, test);
-        // TCPSocket.send(test.c_str(), test.length() + 1);
-        //
-        // TCPSocket.receive(buffer, sizeof(buffer), received);
-        // if (received > 0) {
-        //     std::cout << "Received: " << buffer << std::endl;
-        // }
-
-        // UDPSocket.bind(port); //listen to that port
-        // sf::Thread receiveThread([&UDPSocket, &buffer, &received]() {
-        // sf::IpAddress tempIp;
-        // unsigned short tempPort; 
-        // UDPSocket.receive(buffer, sizeof(buffer), received, tempIp, tempPort);
-        // std::cout << "temp ip: " << tempIp << " temp port " << tempPort << std::endl;
-        // if (received > 0) {
-        //     std::cout << "Received: " << buffer << std::endl;
-        // }
-        // else {
-        //    std::cout << "did not receive anything" << std::endl;
-        // }
-        //
-        // });
-        // receiveThread.launch();
 #pragma endregion Client_Networking
 
 #pragma region SFML_Events
@@ -252,12 +229,12 @@ int main() {
             if (event.type == sf::Event::Closed) {
                 app.close();
             }
-            // else if (event.type == sf::Event::GainedFocus) {
-            //     update = true;
-            // }
-            // else if (event.type == sf::Event::LostFocus) {
-            //     update = false;
-            // }
+            else if (event.type == sf::Event::GainedFocus) {
+                update = true;
+            }
+            else if (event.type == sf::Event::LostFocus) {
+                update = false;
+            }
 
             // Fire control and logic //
             if (event.type == sf::Event::KeyPressed)
@@ -277,7 +254,7 @@ int main() {
 #pragma endregion SFML_Events
 
 #pragma region Keyboard_Inputs
-        // if (update) {
+        if (update) {
             // Movement controls //
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) playersArr[0]->angle += 300 * dt;
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
@@ -285,11 +262,12 @@ int main() {
             }
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) playersArr[0]->thrust = true;
             else playersArr[0]->thrust = false;
+            
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) playersArr[1]->angle += 300 * dt;
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) playersArr[1]->angle -= 300 * dt;
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) playersArr[1]->thrust = true;
             else playersArr[1]->thrust = false;
-        // }
+        }
 
         // Quit Game //
 
@@ -309,12 +287,14 @@ int main() {
         //     TCPPacket << player1_X << player1_Y;
         //     TCPSocket.send(TCPPacket);
         // }
-        TCPSocket.receive(recvTCPPacket);
-        if(recvTCPPacket >> lives) {
-            std::cout << "received and set: " << lives << " lives from the server" << std::endl;
-        } else {
-            // std::cout << "did not receive any packets about lives" << std::endl;
-        }
+        auto recvStatus = TCPSocket.receive(recvTCPPacket);
+        if(recvStatus == sf::Socket::Done) {
+            recvTCPPacket >> lives >> score;
+
+            livesLeft.setString(std::to_string(lives));
+            totalScore.setString(std::to_string(score));
+            std::cout << "received and set: " << lives << " lives from the server and " << score << " Score" << std::endl;
+        } 
 
 #pragma endregion TCPPacket
 
@@ -329,7 +309,9 @@ int main() {
                         entityA->life = false;
                         entityB->life = false;
 
-                        score++;
+                        score += 5;
+                        sf::Packet scorePacket;
+                                              
                         totalScore.setString(std::to_string(score));
 
                         // Adding the explosion animation //
@@ -371,10 +353,7 @@ int main() {
 
                         // Lives are reduced on death, if lives reach 0, pause screen //
                         lives--;
-                        sf::Packet livesPacket;
-                        livesPacket << lives;
-                        TCPSocket.send(livesPacket);
-                        std::cout << "sending " << lives << " lives to the server" << std::endl;
+                       
                         
                         livesLeft.setString(std::to_string(lives));
                         // if (lives < 0) {
@@ -450,6 +429,18 @@ int main() {
                 ++i;
             }
         }
+
+#pragma region Send_Packets
+        if(elapsedTime >= packet_dt) {
+            sf::Packet sendPacket;
+            sendPacket << lives << score;
+            TCPSocket.send(sendPacket);
+            std::cout << "sending " << lives << " lives to the server " << score << " Score" << std::endl;
+            sendPacket.clear();
+            elapsedTime = sf::seconds(0);
+        }
+#pragma endregion Send_Packets
+        
 #pragma endregion OtherEntitiesUpdate
 
         // Draw //
