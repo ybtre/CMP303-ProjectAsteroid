@@ -1,8 +1,10 @@
 #include <SFML/Graphics.hpp>
+#include <SFML/System.hpp>
 #include <time.h>
 #include <list>
 #include <SFML/Audio.hpp>
 #include <iostream>
+#include "SFML/Network.hpp"
 
 #include "../Headers/Macros.h"
 #include "../Headers/Animation.h"
@@ -13,6 +15,12 @@
 #include <vector>
 
 
+// define current local address
+#define SERVERIP sf::IpAddress::getLocalAddress()
+
+// define port to listen to for clients
+#define CLIENTPORT 5555
+
 // Collision detection //
 bool hasCollided(Entity* a, Entity* b) {
     return (b->x - a->x) * (b->x - a->x) +
@@ -21,11 +29,68 @@ bool hasCollided(Entity* a, Entity* b) {
 }
 
 
+// sf::Packet operator>>(const sf::Packet& lhs, const float& rhs);
+
 int main() {
+    int lives = 0;
     srand(time(nullptr));
 
+#pragma region Networking_Setup
+#pragma region TCP
+    sf::TcpSocket TCPSocket;
+    TCPSocket.setBlocking(true);
+    bool update = false;
+
+    sf::TcpListener TCPListener;
+
+    sf::Socket::Status connectionStatus = TCPSocket.connect(SERVERIP, CLIENTPORT);
+    if (connectionStatus == sf::Socket::Done) {
+        // std::cout << "Could not connect to server IP: " << SERVERIP << " Port: " << CLIENTPORT << std::endl; 
+        std::cout << "Connected to server IP: " << SERVERIP << " Port: " << CLIENTPORT << std::endl;
+    } else {
+        std::cout << "Could not connect to Server. Status: " << connectionStatus << std::endl;
+            //Done,         - 0
+            //NotReady,     - 1
+            //Partial,      - 2
+            //Disconnected, - 3
+            //Error         - 4 
+    }
+    sf::Packet initialLivesPacket;
+    TCPSocket.receive(initialLivesPacket);
+    if(initialLivesPacket >> lives) {
+        initialLivesPacket >> lives;
+        std::cout << "received and set: " << lives << " lives from the server" << std::endl;
+    } else {
+        std::cout << "did not receive any INITIAL packets about lives" << std::endl;
+    }
+    
+    TCPSocket.setBlocking(false);
+
+#pragma endregion TCP
+
+#pragma region UDP
+    // sf::UdpSocket UDPSocket;
+    // UDPSocket.setBlocking(false);
+    // char buffer[200];
+    // std::size_t received;
+    // std::map<unsigned short, sf::IpAddress> pcID;
+    // std::string text = "Client Text";
+    // unsigned short setPort;
+    // std::cout << "Set port: ";
+    // std::cin >> setPort;
+    // UDPSocket.bind(setPort);
+    // sf::IpAddress sIp;
+    // std::cout << SERVERIP << std::endl;
+    // std::cout << "Enter server ip: ";
+    // std::cin >> sIp;
+    // UDPSocket.send(text.c_str(), text.length() + 1, sIp, 5555);
+#pragma endregion UDP
+
+#pragma endregion Networking_Setup_end
+
+#pragma region Settings_hideForNow
     // Lifes and Score //
-    int lives = 30;
+   
     int score = 0;
 
     sf::Font hudFont;
@@ -58,7 +123,7 @@ int main() {
     totalScore.setPosition(65, 40);
     totalScore.setFillColor(sf::Color::White);
 
-sf:sf::String playerInput;
+    sf::String playerInput;
     playerText.setFont(hudFont);
     playerText.setString("");
     playerText.setCharacterSize(16);
@@ -124,11 +189,12 @@ sf:sf::String playerInput;
     std::vector<Player*> playersArr;
     playersArr.reserve(3);
 
-    for (int i = 0; i < 15; i++) {
-        Asteroid* asteroid = new Asteroid();
-        asteroid->Init(AsteroidAnim, rand() % WIDTH, rand() % HEIGHT, rand() % 360, 25);
-        entities.push_back(asteroid);
-    }
+    //TODO: asteroid creation, need to control their positions through the server, else both clients see different asteroids :D 
+    // for (int i = 0; i < 15; i++) {
+    //     Asteroid* asteroid = new Asteroid();
+    //     asteroid->Init(AsteroidAnim, rand() % WIDTH, rand() % HEIGHT, rand() % 360, 25);
+    //     entities.push_back(asteroid);
+    // }
 
     Player* player = new Player();
     player->Init(playerAnimations[0], WIDTH / 2, HEIGHT / 2, 10, 20);
@@ -141,6 +207,8 @@ sf:sf::String playerInput;
     // Clock for timing the deltaTime value
     sf::Clock clock;
     float gameSpeed = 1.0f;
+#pragma endregion Settings_hideForNow
+
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////// MAIN LOOP //////////////////////////////////////////////////
@@ -148,11 +216,48 @@ sf:sf::String playerInput;
     while (app.isOpen()) {
         //Get the time since the last frame in milliseconds
         float dt = clock.restart().asSeconds() * gameSpeed;
+
+#pragma region Client_Networking
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////// CLIENT NETWORKING ///////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // std::getline(std::cin, test);
+        // TCPSocket.send(test.c_str(), test.length() + 1);
+        //
+        // TCPSocket.receive(buffer, sizeof(buffer), received);
+        // if (received > 0) {
+        //     std::cout << "Received: " << buffer << std::endl;
+        // }
+
+        // UDPSocket.bind(port); //listen to that port
+        // sf::Thread receiveThread([&UDPSocket, &buffer, &received]() {
+        // sf::IpAddress tempIp;
+        // unsigned short tempPort; 
+        // UDPSocket.receive(buffer, sizeof(buffer), received, tempIp, tempPort);
+        // std::cout << "temp ip: " << tempIp << " temp port " << tempPort << std::endl;
+        // if (received > 0) {
+        //     std::cout << "Received: " << buffer << std::endl;
+        // }
+        // else {
+        //    std::cout << "did not receive anything" << std::endl;
+        // }
+        //
+        // });
+        // receiveThread.launch();
+#pragma endregion Client_Networking
+
+#pragma region SFML_Events
         sf::Event event;
         while (app.pollEvent(event)) {
             if (event.type == sf::Event::Closed) {
                 app.close();
             }
+            // else if (event.type == sf::Event::GainedFocus) {
+            //     update = true;
+            // }
+            // else if (event.type == sf::Event::LostFocus) {
+            //     update = false;
+            // }
 
             // Fire control and logic //
             if (event.type == sf::Event::KeyPressed)
@@ -168,31 +273,58 @@ sf:sf::String playerInput;
                     playerText.setString(playerInput);
                 }
             }
-
         }
+#pragma endregion SFML_Events
 
-        // Movement controls //
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) playersArr[0]->angle += 300 * dt;
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) playersArr[0]->angle -= 300 * dt;
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) playersArr[0]->thrust = true;
-        else playersArr[0]->thrust = false;
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) playersArr[1]->angle += 300 * dt;
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) playersArr[1]->angle -= 300 * dt;
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) playersArr[1]->thrust = true;
-        else playersArr[1]->thrust = false;
+#pragma region Keyboard_Inputs
+        // if (update) {
+            // Movement controls //
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) playersArr[0]->angle += 300 * dt;
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
+                playersArr[0]->angle -= 300 * dt;
+            }
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) playersArr[0]->thrust = true;
+            else playersArr[0]->thrust = false;
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) playersArr[1]->angle += 300 * dt;
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) playersArr[1]->angle -= 300 * dt;
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) playersArr[1]->thrust = true;
+            else playersArr[1]->thrust = false;
+        // }
 
         // Quit Game //
 
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape)) {
             app.close();
         }
+#pragma endregion Keyboard_Inputs
+
+#pragma region TCPPacket
+        auto player1_X = playersArr[0]->GetPlayerPosition_X();
+        auto player1_Y = playersArr[0]->GetPlayerPosition_Y();
+        auto player2_X = playersArr[1]->GetPlayerPosition_X();
+        auto player2_Y = playersArr[1]->GetPlayerPosition_Y();
+        sf::Packet recvTCPPacket;
+        // if(playersArr[0]->dx != playersArr[0]->GetPlayerPosition_X()) { // send if pos is different
+        // if (player1_X != 0 && player1_Y != 0) {
+        //     TCPPacket << player1_X << player1_Y;
+        //     TCPSocket.send(TCPPacket);
+        // }
+        TCPSocket.receive(recvTCPPacket);
+        if(recvTCPPacket >> lives) {
+            std::cout << "received and set: " << lives << " lives from the server" << std::endl;
+        } else {
+            // std::cout << "did not receive any packets about lives" << std::endl;
+        }
+
+#pragma endregion TCPPacket
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //////////////////////////////////////// Collision Detection ///////////////////////////////////////////////////////////
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#pragma region AsteroidBullet_CollisionDetection
         for (auto entityA : entities)
             for (auto entityB : entities) {
-                if (entityA->name == "asteroid" && entityB->name == "bullet")
+                if (entityA->name == "asteroid" && entityB->name == "bullet") {
                     if (hasCollided(entityA, entityB)) {
                         entityA->life = false;
                         entityB->life = false;
@@ -214,40 +346,47 @@ sf:sf::String playerInput;
                             smallAsteroid->Init(AsteroidSmallAnim, entityA->x, entityA->y, rand() % 360, 15);
                             entities.push_back(smallAsteroid);
                         }
-
-                    }
-
-                ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-                ///////////////////////////////// Death when colliding with an Asteroid ////////////////////////////////////////////////
-                ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-                for (int i = 0; i < playersArr.size(); i++) {
-                    if (playersArr[i]->name == "player" && entityB->name == "asteroid") {
-                        if (hasCollided(playersArr[i], entityB)) {
-                            entityB->life = false;
-
-                            Entity* explosion = new Entity();
-                            explosion->Init(Player_ShipExplosion_Anim, playersArr[i]->x, playersArr[i]->y);
-                            explosion->name = "explosion";
-                            entities.push_back(explosion);
-
-                            // Player respawn point 
-                            playersArr[i]->Init(playerAnimations[i], WIDTH / 2, HEIGHT / 2, 0, 20);
-                            playersArr[i]->dx = 0;
-                            playersArr[i]->dy = 0;
-
-                            // Lives are reduced on death, if lives reach 0, pause screen //
-                            lives--;
-                            livesLeft.setString(std::to_string(lives));
-                            // if (lives < 0) {
-                            //     std::cout << "      GAME OVER" << std::endl << std::endl;
-                            //     system("pause");
-                            //     app.close();
-                            // }
-                        }
                     }
                 }
             }
+#pragma endregion AsteroidBullet_CollisionDetection
 
+        ///////////////////////////////// Death when colliding with an Asteroid ////////////////////////////////////////////////
+#pragma region PlayerAsteroid_CollisionDetectionResponce
+        for (auto entity : entities) {
+            for (int i = 0; i < playersArr.size(); i++) {
+                if (playersArr[i]->name == "player" && entity->name == "asteroid") {
+                    if (hasCollided(playersArr[i], entity)) {
+                        entity->life = false;
+
+                        Entity* explosion = new Entity();
+                        explosion->Init(Player_ShipExplosion_Anim, playersArr[i]->x, playersArr[i]->y);
+                        explosion->name = "explosion";
+                        entities.push_back(explosion);
+
+                        // Player respawn point 
+                        playersArr[i]->Init(playerAnimations[i], WIDTH / 2, HEIGHT / 2, 0, 20);
+                        playersArr[i]->dx = 0;
+                        playersArr[i]->dy = 0;
+
+                        // Lives are reduced on death, if lives reach 0, pause screen //
+                        lives--;
+                        sf::Packet livesPacket;
+                        livesPacket << lives;
+                        TCPSocket.send(livesPacket);
+                        std::cout << "sending " << lives << " lives to the server" << std::endl;
+                        
+                        livesLeft.setString(std::to_string(lives));
+                        // if (lives < 0) {
+                        //     std::cout << "      GAME OVER" << std::endl << std::endl;
+                        //     system("pause");
+                        //     app.close();
+                        // }
+                    }
+                }
+            }
+        }
+#pragma endregion PlayerAsteroid_CollisionDetectionResponce
 
         // Player //
         for (int i = 0; i < playersArr.size(); i++) {
@@ -260,7 +399,7 @@ sf:sf::String playerInput;
         }
 
 
-        // Animation for the asteroid explosion //
+        // Animation for the asteroid explosion 
         for (auto entity : entities) {
             if (entity->name == "explosion") {
                 if (entity->anim.isEnd()) {
@@ -280,6 +419,7 @@ sf:sf::String playerInput;
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         /////////////////////////////////////////////////// Update All Entities ////////////////////////////////////////////////
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#pragma region PlayerUpdate
         for (auto i = playersArr.begin(); i != playersArr.end();) {
             Player* player = *i;
 
@@ -294,6 +434,8 @@ sf:sf::String playerInput;
                 ++i;
             }
         }
+#pragma endregion PlayerUpdate
+#pragma region OtherEntitiesUpdate
         for (auto i = entities.begin(); i != entities.end();) {
             Entity* entity = *i;
 
@@ -308,7 +450,7 @@ sf:sf::String playerInput;
                 ++i;
             }
         }
-
+#pragma endregion OtherEntitiesUpdate
 
         // Draw //
         //app.draw(endScreen);

@@ -9,7 +9,7 @@ void Player::Update(float deltaTime) {
         dx += cos(angle * DEGTORAD) * 6;
         dy += sin(angle * DEGTORAD) * 6;
     }
-    else {
+    else { // natural slow down of speed over time if player is not accelarating 
         dx *= 0.99;
         dy *= 0.99;
     }
