@@ -1,5 +1,6 @@
 #include <iostream>
 #include <list>
+#include <set>
 #include <SFML/Network.hpp>
 
 // define current local address
@@ -7,42 +8,53 @@
 
 // define port to listen to for clients
 #define SERVERPORT 5555
+#define UDPPORT 5556
 
 
 int main() {
     int lives = 300;
     int score = 0;
-    // float player1_X, player2_X;
-    // float player1_Y, player2_Y;
+    float player1_X, player2_X;
+    float player1_Y, player2_Y;
 
     std::cout << "Sever Running" << std::endl;
-    std::cout << "Server IP: " << SERVERIP << " Port: " << SERVERPORT << std::endl;
+    std::cout << "Server IP: " << SERVERIP << " TCP Port: " << SERVERPORT << " UDP Port: " << UDPPORT << std::endl;
+
+    sf::UdpSocket UDPSocket;
+    // UDPSocket.setBlocking(true);
+    // unsigned short port;
+    // std::cout << "Set port number (different from 5555): ";
+    // std::cin >> port;
+    UDPSocket.bind(UDPPORT);
+    UDPSocket.setBlocking(false);
 
     sf::TcpListener TCPListener;
     sf::SocketSelector tcp_selector;
     sf::Socket::Status status = {};
     std::vector<sf::TcpSocket*> tcp_clients;
 
-    sf::SocketSelector udp_selector;
-    std::vector<sf::UdpSocket*> udp_clients;
+    std::set<unsigned short> UDPPorts;
 
     sf::Packet sendInitLives_Packet;
     TCPListener.listen(SERVERPORT);
     tcp_selector.add(TCPListener);
 
-    sf::Packet receivedPacket;
     bool done = false;
     while (!done) {
+#pragma region TCP
         if (tcp_selector.wait()) {
             if (tcp_selector.isReady(TCPListener)) {
                 sf::TcpSocket* socket = new sf::TcpSocket;
                 TCPListener.accept(*socket);
+                std::cout << "///////// Accepted new client /////////" << std::endl;
+
                 sf::Packet initPacket;
                 if (status == sf::Socket::Done) {
                     initPacket << lives << score;
                     socket->send(initPacket);
-                    //TODO: add ID to each client
-                    std::cout << "Sent " << lives << " initial lives and " << score << " Score" << std::endl;
+                    // TODO: add ID to each client
+                    std::cout << "Sent " << lives << " initial lives and " << score << " Score to new client" <<
+                        std::endl;
                 }
                 tcp_clients.push_back(socket);
                 tcp_selector.add(*socket);
@@ -54,11 +66,12 @@ int main() {
                         if (tcp_clients[i]->receive(packet) == sf::Socket::Done) {
                             packet >> lives >> score;
                             sendPacket << lives << score;
-                            std::cout << "Received " << lives << " from client and " << score << " Score" << std::endl; 
+                            std::cout << "Received " << lives << " from client and " << score << " Score" << std::endl;
                             for (auto j = 0; j < tcp_clients.size(); j++) {
                                 if (i != j) {
                                     tcp_clients[j]->send(sendPacket);
-                                    std::cout << "Sending " << lives << " Lives and " << score << " Score" << " to client" << std::endl;
+                                    std::cout << "Sending " << lives << " Lives and " << score << " Score" <<
+                                        " to client" << std::endl;
                                 }
                             }
                         }
@@ -66,10 +79,39 @@ int main() {
                 }
             }
         }
+#pragma endregion TCP
+
+#pragma region UDP
+        sf::IpAddress recvIP;
+        unsigned short recvPort;
+        sf::Packet recvPositions, sendPositions;
+        if (UDPSocket.receive(recvPositions, recvIP, recvPort) == sf::Socket::Done) {
+            std::cout << "Received positions" << std::endl;
+            if (recvPort != 0) {
+                UDPPorts.insert(recvPort);
+            }
+
+            recvPositions >> player1_X >> player1_Y >> player2_X >> player2_Y;
+            std::cout << "Received positions: "
+                << player1_X << " p1X; "
+                << player1_Y << " p1Y; "
+                << player2_X << " p2X; "
+                << player2_Y << " p2Y;" << std::endl;
+
+            sendPositions << player1_X << player1_Y << player2_X << player2_Y;
+            for (auto port : UDPPorts) {
+                if (port != recvPort) {
+                    UDPSocket.send(sendPositions, recvIP, port);
+                    std::cout << "Sending positions" << std::endl;
+                }
+            }
+        }
     }
+#pragma endregion UDP
 
     for(std::vector<sf::TcpSocket*>::iterator it = tcp_clients.begin(); it != tcp_clients.end(); ++it) {
         delete *it;
     }
-    return 0;
+    return
+        0;
 }

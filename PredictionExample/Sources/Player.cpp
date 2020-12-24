@@ -10,8 +10,8 @@ void Player::Update(float deltaTime) {
         dy += sin(angle * DEGTORAD) * 6;
     }
     else { // natural slow down of speed over time if player is not accelarating 
-        dx *= 0.99;
-        dy *= 0.99;
+        dx *= 0;
+        dy *= 0;
     }
 
     int maxSpeed = 300;

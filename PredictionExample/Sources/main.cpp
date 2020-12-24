@@ -18,8 +18,8 @@
 // define current local address
 #define SERVERIP sf::IpAddress::getLocalAddress()
 
-// define port to listen to for clients
-#define CLIENTPORT 5555
+#define SERVERPORT 5555
+#define UDPPORT 5556
 
 // Collision detection //
 bool hasCollided(Entity* a, Entity* b) {
@@ -34,6 +34,11 @@ bool hasCollided(Entity* a, Entity* b) {
 int main() {
     int lives = 0;
     int score = 0;
+    float sf_totalTime = 0;
+
+    float player1_X, player2_X;
+    float player1_Y, player2_Y;
+    
     srand(time(nullptr));
 
 #pragma region Networking_Setup
@@ -44,10 +49,9 @@ int main() {
 
     sf::TcpListener TCPListener;
 
-    sf::Socket::Status connectionStatus = TCPSocket.connect(SERVERIP, CLIENTPORT);
+    sf::Socket::Status connectionStatus = TCPSocket.connect(SERVERIP, SERVERPORT);
     if (connectionStatus == sf::Socket::Done) {
-        // std::cout << "Could not connect to server IP: " << SERVERIP << " Port: " << CLIENTPORT << std::endl; 
-        std::cout << "Connected to server IP: " << SERVERIP << " Port: " << CLIENTPORT << std::endl;
+        std::cout << "Connected to server IP: " << SERVERIP << " Port: " << SERVERPORT << std::endl;
     } else {
         std::cout << "Could not connect to Server. Status: " << connectionStatus << std::endl;
             //Done,         - 0
@@ -70,21 +74,13 @@ int main() {
 #pragma endregion TCP
 
 #pragma region UDP
-    // sf::UdpSocket UDPSocket;
-    // UDPSocket.setBlocking(false);
-    // char buffer[200];
-    // std::size_t received;
-    // std::map<unsigned short, sf::IpAddress> pcID;
-    // std::string text = "Client Text";
-    // unsigned short setPort;
-    // std::cout << "Set port: ";
-    // std::cin >> setPort;
-    // UDPSocket.bind(setPort);
-    // sf::IpAddress sIp;
-    // std::cout << SERVERIP << std::endl;
-    // std::cout << "Enter server ip: ";
-    // std::cin >> sIp;
-    // UDPSocket.send(text.c_str(), text.length() + 1, sIp, 5555);
+    sf::UdpSocket UDPSocket;
+    UDPSocket.setBlocking(true);
+    unsigned short port;
+    std::cout << "Set port number: ";
+    std::cin >> port;
+    UDPSocket.bind(port);
+    UDPSocket.setBlocking(false);
 #pragma endregion UDP
 
 #pragma endregion Networking_Setup_end
@@ -95,7 +91,7 @@ int main() {
         return 0;
 
     // setting the text HUD //
-    sf::Text lifeLabel, scoreLabel, livesLeft, totalScore, playerText;
+    sf::Text lifeLabel, scoreLabel, livesLeft, totalScore, playerText, totalTime;
     lifeLabel.setFont(hudFont);
     lifeLabel.setString("Lives Remaining: ");
     lifeLabel.setCharacterSize(16);
@@ -119,6 +115,12 @@ int main() {
     totalScore.setCharacterSize(16);
     totalScore.setPosition(65, 40);
     totalScore.setFillColor(sf::Color::White);
+
+    totalTime.setFont(hudFont);
+    totalTime.setString(std::to_string(sf_totalTime));
+    totalTime.setCharacterSize(16);
+    totalTime.setPosition(500, 16);
+    totalTime.setFillColor(sf::Color::White);
 
     sf::String playerInput;
     playerText.setFont(hudFont);
@@ -186,7 +188,8 @@ int main() {
     std::vector<Player*> playersArr;
     playersArr.reserve(3);
 
-    //TODO: asteroid creation, need to control their positions through the server, else both clients see different asteroids :D 
+    //TODO: asteroid creation, need to control their positions through the server, else both clients see different asteroids :D
+    // TODO: temporary commented out so i dont spawn new ones
     // for (int i = 0; i < 15; i++) {
     //     Asteroid* asteroid = new Asteroid();
     //     asteroid->Init(AsteroidAnim, rand() % WIDTH, rand() % HEIGHT, rand() % 360, 25);
@@ -205,6 +208,7 @@ int main() {
     sf::Clock clock;
     sf::Time elapsedTime;
     sf::Clock PacketClock;
+   
 #pragma endregion Settings_hideForNow
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -215,13 +219,7 @@ int main() {
         float dt = clock.restart().asSeconds();
         sf::Time packet_dt = sf::seconds(0.33);
         elapsedTime += PacketClock.restart();
-        
-
-#pragma region Client_Networking
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ////////////////////////////////////////////////// CLIENT NETWORKING ///////////////////////////////////////////////
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#pragma endregion Client_Networking
+        sf_totalTime += dt;
 
 #pragma region SFML_Events
         sf::Event event;
@@ -275,18 +273,12 @@ int main() {
             app.close();
         }
 #pragma endregion Keyboard_Inputs
-
+#pragma region Client_Networking
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////// CLIENT NETWORKING ///////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #pragma region TCPPacket
-        auto player1_X = playersArr[0]->GetPlayerPosition_X();
-        auto player1_Y = playersArr[0]->GetPlayerPosition_Y();
-        auto player2_X = playersArr[1]->GetPlayerPosition_X();
-        auto player2_Y = playersArr[1]->GetPlayerPosition_Y();
         sf::Packet recvTCPPacket;
-        // if(playersArr[0]->dx != playersArr[0]->GetPlayerPosition_X()) { // send if pos is different
-        // if (player1_X != 0 && player1_Y != 0) {
-        //     TCPPacket << player1_X << player1_Y;
-        //     TCPSocket.send(TCPPacket);
-        // }
         auto recvStatus = TCPSocket.receive(recvTCPPacket);
         if(recvStatus == sf::Socket::Done) {
             recvTCPPacket >> lives >> score;
@@ -295,8 +287,42 @@ int main() {
             totalScore.setString(std::to_string(score));
             std::cout << "received and set: " << lives << " lives from the server and " << score << " Score" << std::endl;
         } 
-
 #pragma endregion TCPPacket
+#pragma region UDPPacket
+        if(elapsedTime >= packet_dt) {
+            auto getP1_X = playersArr[0]->GetPlayerPosition_X();
+            auto getP1_Y = playersArr[0]->GetPlayerPosition_Y();
+            auto getP2_X = playersArr[1]->GetPlayerPosition_X();
+            auto getP2_Y = playersArr[1]->GetPlayerPosition_Y();
+            
+            sf::Packet sendPositions;
+            sendPositions << getP1_X << getP1_Y << getP2_X << getP2_Y;
+            UDPSocket.send(sendPositions, SERVERIP, UDPPORT);
+            std::cout << "Sending player Positions" << std::endl;
+        }
+
+        sf::IpAddress recvIP;
+        unsigned short recvPort;
+        sf::Packet recvPositions;
+        auto UDPStatus = UDPSocket.receive(recvPositions, recvIP, recvPort);
+        if(UDPStatus == sf::Socket::Done){
+            recvPositions >> player1_X >> player1_Y >> player2_X >> player2_Y;
+            // if(elapsedTime >= packet_dt) {
+                std::cout << "Setting player positions: "
+                            << player1_X << " p1X; "
+                            << player1_Y << " p1Y; "
+                            << player2_X << " p2X; "
+                            << player2_Y << " p2Y;" << std::endl;
+            
+                playersArr[0]->SetPlayerPos_X(player1_X);
+                playersArr[0]->SetPlayerPos_Y(player1_Y);
+                playersArr[1]->SetPlayerPos_X(player2_X);
+                playersArr[1]->SetPlayerPos_Y(player2_Y);
+            // }
+        }
+#pragma endregion UDPPacket
+#pragma endregion Client_Networking
+
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //////////////////////////////////////// Collision Detection ///////////////////////////////////////////////////////////
@@ -389,11 +415,12 @@ int main() {
 
 
         // Creating smaller asteroids from destroyed ones //
-        if (rand() % 150 == 0) {
-            Asteroid* asteroid = new Asteroid();
-            asteroid->Init(AsteroidAnim, 0, rand() % HEIGHT, rand() % 360, 25);
-            entities.push_back(asteroid);
-        }
+        // TODO: temporary commented out so i dont spawn new ones
+        // if (rand() % 150 == 0) {
+        //     Asteroid* asteroid = new Asteroid();
+        //     asteroid->Init(AsteroidAnim, 0, rand() % HEIGHT, rand() % 360, 25);
+        //     entities.push_back(asteroid);
+        // }
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         /////////////////////////////////////////////////// Update All Entities ////////////////////////////////////////////////
@@ -445,6 +472,7 @@ int main() {
 
         // Draw //
         //app.draw(endScreen);
+        app.draw(totalTime);
         app.draw(background);
         app.draw(lifeLabel);
         app.draw(livesLeft);
