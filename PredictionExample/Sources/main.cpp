@@ -1,6 +1,6 @@
 #include <SFML/Graphics.hpp>
-#include <SFML/System.hpp>
 #include <time.h>
+#include <windows.h>
 #include <list>
 #include <SFML/Audio.hpp>
 #include <iostream>
@@ -28,21 +28,25 @@ bool hasCollided(Entity* a, Entity* b) {
         (a->mRadius + b->mRadius) * (a->mRadius + b->mRadius);
 }
 
-
-// sf::Packet operator>>(const sf::Packet& lhs, const float& rhs);
-
 int main() {
     int lives = 0;
     int score = 0;
-    float sf_totalTime = 0;
+    // float sf_totalTime = 0;
 
+    // floats to store/get/set player position info between send and receive packets
     float player1_X, player2_X;
     float player1_Y, player2_Y;
-    
+    int clientID, recvID;
+
     srand(time(nullptr));
 
+    SYSTEMTIME systemtime;
+
+    std::string lastPosition_SendTime;
+    int recv_lastPosition_SendTime;
+
 #pragma region Networking_Setup
-#pragma region TCP
+#pragma region TCP setup
     sf::TcpSocket TCPSocket;
     TCPSocket.setBlocking(true);
     bool update = false;
@@ -52,28 +56,32 @@ int main() {
     sf::Socket::Status connectionStatus = TCPSocket.connect(SERVERIP, SERVERPORT);
     if (connectionStatus == sf::Socket::Done) {
         std::cout << "Connected to server IP: " << SERVERIP << " Port: " << SERVERPORT << std::endl;
-    } else {
+    }
+    else {
         std::cout << "Could not connect to Server. Status: " << connectionStatus << std::endl;
-            //Done,         - 0
-            //NotReady,     - 1
-            //Partial,      - 2
-            //Disconnected, - 3
-            //Error         - 4 
+        //Done,         - 0
+        //NotReady,     - 1
+        //Partial,      - 2
+        //Disconnected, - 3
+        //Error         - 4 
     }
     sf::Packet initPacket;
-    auto initRecvStatus =   TCPSocket.receive(initPacket);
-    if(initRecvStatus == sf::Socket::Done) {
-        initPacket >> lives >> score;
-        std::cout << "received and set INITIAL: " << lives << " lives from the server" << std::endl;
-    } else {
+    auto initRecvStatus = TCPSocket.receive(initPacket);
+    if (initRecvStatus == sf::Socket::Done) {
+        initPacket >> lives >> score >> clientID;
+        // std::cout << "received and set INITIAL: " << lives << " lives from the server" << std::endl;
+        std::cout << "Received and set ClientID " << clientID << " from SERVER" << std::endl;
+        initPacket.clear();
+    }
+    else {
         std::cout << "did not receive any INITIAL packets about lives" << std::endl;
     }
-    
+
     TCPSocket.setBlocking(false);
 
-#pragma endregion TCP
+#pragma endregion TCP setup
 
-#pragma region UDP
+#pragma region UDP setup
     sf::UdpSocket UDPSocket;
     UDPSocket.setBlocking(true);
     unsigned short port;
@@ -81,12 +89,12 @@ int main() {
     std::cin >> port;
     UDPSocket.bind(port);
     UDPSocket.setBlocking(false);
-#pragma endregion UDP
+#pragma endregion UDP setup
 
 #pragma endregion Networking_Setup_end
 
 #pragma region Settings_hideForNow
-     sf::Font hudFont;
+    sf::Font hudFont;
     if (!hudFont.loadFromFile("images/Fonts/Magettas Regular DEMO.otf"))
         return 0;
 
@@ -116,11 +124,11 @@ int main() {
     totalScore.setPosition(65, 40);
     totalScore.setFillColor(sf::Color::White);
 
-    totalTime.setFont(hudFont);
-    totalTime.setString(std::to_string(sf_totalTime));
-    totalTime.setCharacterSize(16);
-    totalTime.setPosition(500, 16);
-    totalTime.setFillColor(sf::Color::White);
+    // totalTime.setFont(hudFont);
+    // totalTime.setString(std::to_string(sf_totalTime));
+    // totalTime.setCharacterSize(16);
+    // totalTime.setPosition(500, 16);
+    // totalTime.setFillColor(sf::Color::White);
 
     sf::String playerInput;
     playerText.setFont(hudFont);
@@ -131,7 +139,7 @@ int main() {
 
     // Window rendering and naming //
     sf::RenderWindow app(sf::VideoMode(WIDTH, HEIGHT), "Asteroids!");
-    app.setFramerateLimit(60);
+    app.setFramerateLimit(30);
 
 
     // Textures
@@ -208,7 +216,7 @@ int main() {
     sf::Clock clock;
     sf::Time elapsedTime;
     sf::Clock PacketClock;
-   
+
 #pragma endregion Settings_hideForNow
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -218,8 +226,11 @@ int main() {
         //Get the time since the last frame in milliseconds
         float dt = clock.restart().asSeconds();
         sf::Time packet_dt = sf::seconds(0.33);
+        sf::Time test_Dt = sf::seconds(0.33);
         elapsedTime += PacketClock.restart();
-        sf_totalTime += dt;
+        // sf_totalTime += dt;
+        GetSystemTime(&systemtime);
+
 
 #pragma region SFML_Events
         sf::Event event;
@@ -260,7 +271,7 @@ int main() {
             }
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) playersArr[0]->thrust = true;
             else playersArr[0]->thrust = false;
-            
+
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) playersArr[1]->angle += 300 * dt;
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) playersArr[1]->angle -= 300 * dt;
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) playersArr[1]->thrust = true;
@@ -280,46 +291,43 @@ int main() {
 #pragma region TCPPacket
         sf::Packet recvTCPPacket;
         auto recvStatus = TCPSocket.receive(recvTCPPacket);
-        if(recvStatus == sf::Socket::Done) {
+        if (recvStatus == sf::Socket::Done) {
             recvTCPPacket >> lives >> score;
 
             livesLeft.setString(std::to_string(lives));
             totalScore.setString(std::to_string(score));
-            std::cout << "received and set: " << lives << " lives from the server and " << score << " Score" << std::endl;
-        } 
+            std::cout << "received and set: " << lives << " lives from the server and " << score << " Score" <<
+                std::endl;
+            recvTCPPacket.clear();
+        }
 #pragma endregion TCPPacket
 #pragma region UDPPacket
-        if(elapsedTime >= packet_dt) {
-            auto getP1_X = playersArr[0]->GetPlayerPosition_X();
-            auto getP1_Y = playersArr[0]->GetPlayerPosition_Y();
-            auto getP2_X = playersArr[1]->GetPlayerPosition_X();
-            auto getP2_Y = playersArr[1]->GetPlayerPosition_Y();
-            
-            sf::Packet sendPositions;
-            sendPositions << getP1_X << getP1_Y << getP2_X << getP2_Y;
-            UDPSocket.send(sendPositions, SERVERIP, UDPPORT);
-            std::cout << "Sending player Positions" << std::endl;
-        }
-
         sf::IpAddress recvIP;
         unsigned short recvPort;
-        sf::Packet recvPositions;
-        auto UDPStatus = UDPSocket.receive(recvPositions, recvIP, recvPort);
-        if(UDPStatus == sf::Socket::Done){
-            recvPositions >> player1_X >> player1_Y >> player2_X >> player2_Y;
-            // if(elapsedTime >= packet_dt) {
+        sf::Packet recvUDP;
+        auto UDPStatus = UDPSocket.receive(recvUDP, recvIP, recvPort);
+        if (UDPStatus == sf::Socket::Done) {
+            recvUDP >> player1_X >> player1_Y >> player2_X >> player2_Y >> recv_lastPosition_SendTime >> recvID;
+            std::cout << "recvID" << recvID << " myID " << clientID << std::endl;
+            // std::string currenttime = std::to_string(systemtime.wHour) + std::to_string(systemtime.wMinute) +
+                // std::to_string(systemtime.wSecond) + std::to_string(systemtime.wMilliseconds);
+            // int recvTime = std::stoi(currenttime);
+            if (recvID != clientID) {
                 std::cout << "Setting player positions: "
-                            << player1_X << " p1X; "
-                            << player1_Y << " p1Y; "
-                            << player2_X << " p2X; "
-                            << player2_Y << " p2Y;" << std::endl;
-            
+                    << player1_X << " p1X; "
+                    << player1_Y << " p1Y; "
+                    << player2_X << " p2X; "
+                    << player2_Y << " p2Y;" << std::endl;
+
                 playersArr[0]->SetPlayerPos_X(player1_X);
                 playersArr[0]->SetPlayerPos_Y(player1_Y);
                 playersArr[1]->SetPlayerPos_X(player2_X);
                 playersArr[1]->SetPlayerPos_Y(player2_Y);
-            // }
+                recvUDP.clear();
+            }
         }
+
+
 #pragma endregion UDPPacket
 #pragma endregion Client_Networking
 
@@ -336,8 +344,7 @@ int main() {
                         entityB->life = false;
 
                         score += 5;
-                        sf::Packet scorePacket;
-                                              
+
                         totalScore.setString(std::to_string(score));
 
                         // Adding the explosion animation //
@@ -379,8 +386,8 @@ int main() {
 
                         // Lives are reduced on death, if lives reach 0, pause screen //
                         lives--;
-                       
-                        
+
+
                         livesLeft.setString(std::to_string(lives));
                         // if (lives < 0) {
                         //     std::cout << "      GAME OVER" << std::endl << std::endl;
@@ -412,7 +419,6 @@ int main() {
                 }
             }
         }
-
 
         // Creating smaller asteroids from destroyed ones //
         // TODO: temporary commented out so i dont spawn new ones
@@ -456,19 +462,42 @@ int main() {
                 ++i;
             }
         }
+#pragma endregion OtherEntitiesUpdate
 
 #pragma region Send_Packets
-        if(elapsedTime >= packet_dt) {
-            sf::Packet sendPacket;
-            sendPacket << lives << score;
-            TCPSocket.send(sendPacket);
-            std::cout << "sending " << lives << " lives to the server " << score << " Score" << std::endl;
-            sendPacket.clear();
+        if (elapsedTime >= test_Dt) {
+            auto getP1_X = playersArr[0]->GetPlayerPosition_X();
+            auto getP1_Y = playersArr[0]->GetPlayerPosition_Y();
+            auto getP2_X = playersArr[1]->GetPlayerPosition_X();
+            auto getP2_Y = playersArr[1]->GetPlayerPosition_Y();
+
+            /*
+            * converting doubles received from systemtime function to strings in order to add them one next to the other
+            * then converting to int before sending so that it is easier to compare the values when they are received
+            */
+            sf::Packet sendPositions;
+            lastPosition_SendTime = std::to_string(systemtime.wHour) + std::to_string(systemtime.wMinute) +
+                std::to_string(systemtime.wSecond) + std::to_string(systemtime.wMilliseconds);
+            int posTime = std::stoi(lastPosition_SendTime);
+            // std::cout << "H: "<<systemtime.wHour << " Min: " << systemtime.wMinute << " Sec: " << systemtime.wSecond<< " Mili: "<< systemtime.wMilliseconds << std::endl;
+            // std::cout << "Pos Send Time as int: " << std::stoi(lastPosition_SendTime) << std::endl;
+            sendPositions << getP1_X << getP1_Y << getP2_X << getP2_Y << posTime << clientID;
+            // std::cout << "last pos time: " << lastPosition_SendTime << std::endl;
+            // std::cout << "ClientID: " << clientID << std::endl;
+            UDPSocket.send(sendPositions, SERVERIP, UDPPORT);
+            sendPositions.clear();
+        }
+
+        if (elapsedTime >= packet_dt) {
+            sf::Packet sendStats;
+            sendStats << lives << score;
+            TCPSocket.send(sendStats);
+            // std::cout << "sending " << lives << " lives to the server " << score << " Score" << std::endl;
+            sendStats.clear();
             elapsedTime = sf::seconds(0);
         }
+
 #pragma endregion Send_Packets
-        
-#pragma endregion OtherEntitiesUpdate
 
         // Draw //
         //app.draw(endScreen);

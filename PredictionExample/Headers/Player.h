@@ -9,7 +9,7 @@
 
 class Player : public Entity {
 public:
-    bool thrust;
+    bool thrust = false;;
 
     Player();
 
